@@ -1,5 +1,5 @@
 import numpy as np
-from .thread_pool import ThreadPool
+from .process_pool import ProcessPool
 from .gbs import GBS
 
 
@@ -62,6 +62,9 @@ class ExtrapolationStepper(object):
     def _evaluate_parallel(self, system, state, t, dt):
         """Evaluate the time steppers in parallel across the pool."""
         # Set the arguments to the stepper calls
+        # FIXME: system doesn't change each evaluation.  pass this once when step() is
+        # called.  In addition, we should use shared mp.Arrays to pass state back and
+        # forth since we are abusing pipes otherwise
         self._pool.set_args('all', (system, state, t, dt))
 
         # Notify the threads to process
@@ -103,5 +106,5 @@ class ExtrapolationStepper(object):
             return eval
 
         fns = [make_worker_target_fn(ii) for ii in range(num_cores)]
-        self._pool = ThreadPool(fns)
+        self._pool = ProcessPool(fns)
 
