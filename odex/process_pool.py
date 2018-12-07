@@ -7,13 +7,12 @@ from .state import State
 
 class WorkerProcess(object):
     def __init__(self, target, system, state, callback=None):
-        """Construct the worker thread with a target function and optional
+        """Construct the worker process with a target function and optional
            arguments and callback.  When notified, the target function is
-           evaluated, with the result accessible by the data() member function.
-           Utilize the callback argument to receive the target function result
-           or otherwise respond to function evaluation completion.
+           evaluated, then the callback is called with the result.  This enables
+           responding to function completion.
            :param target: Function to be called when notified.
-           :param args: Tuple of arguments to pass to the target function
+           :param system: Time stepper system.
            :param callback: Callback function called as callback(data) with
                             data the returned value of the target function.
         """
@@ -76,6 +75,10 @@ class ProcessPool(object):
            :param fns: Target functions for the thread pool.  One thread per 
                        function is created, and all are trigger when notify()
                        is called on the pool.
+           :param system: Time stepper system.
+           :param state: Time stepper output type.
+           :param callback: Method to pass to the worker thread when processing
+                            completes.
         """
         self._fns = fns
         self._event = mp.Event()
@@ -101,6 +104,7 @@ class ProcessPool(object):
         self.join()
 
     def set_state(self, state):
+        """Set the state to be passed on to the worker."""
         self._state.value = state
 
     def set_args(self, index, args):

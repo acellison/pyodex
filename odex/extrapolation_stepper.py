@@ -9,6 +9,8 @@ class ExtrapolationStepper(object):
            :param steppers: list of underlying time steppers
            :param steps: step counts for each stepper in the extrapolation scheme
            :param weights: weights for each stepper in the scheme
+           :param system: ODE system to time step
+           :param state: state type returned by the time stepper
            :param num_cores: number of cores on which to evaluate the scheme
         """
         if len(steppers) != len(steps) or len(steppers) != len(weights):
