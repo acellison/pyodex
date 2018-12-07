@@ -1,10 +1,10 @@
 import numpy as np
 from .process_pool import ProcessPool
-from .gbs import GBS
+from .state import State
 
 
 class ExtrapolationStepper(object):
-    def __init__(self, steppers, steps, weights, num_cores=1):
+    def __init__(self, steppers, steps, weights, system, state, num_cores=1):
         """Initialize the ExtrapolationStepper
            :param steppers: list of underlying time steppers
            :param steps: step counts for each stepper in the extrapolation scheme
@@ -23,7 +23,7 @@ class ExtrapolationStepper(object):
         self._num_cores = num_cores
         if num_cores > 1:
             self._evalfn = self._evaluate_parallel
-            self._initialize_threads(num_cores)
+            self._initialize_threads(num_cores, system, state)
         else:
             self._evalfn = self._evaluate_serial
             self._pool = None
@@ -62,49 +62,45 @@ class ExtrapolationStepper(object):
     def _evaluate_parallel(self, system, state, t, dt):
         """Evaluate the time steppers in parallel across the pool."""
         # Set the arguments to the stepper calls
-        # FIXME: system doesn't change each evaluation.  pass this once when step() is
-        # called.  In addition, we should use shared mp.Arrays to pass state back and
-        # forth since we are abusing pipes otherwise
-        self._pool.set_args('all', (system, state, t, dt))
+        self._pool.set_state(state)
+        self._pool.set_args('all', (t, dt))
 
         # Notify the threads to process
         self._pool.notify()
 
         # Access the pool data, blocking until synchronized
-        data = self._pool.data()
+        self._pool.synchronize()
 
         # Merge the thread worker results into a single array
-        results = [None]*len(self._steppers)
-        for ii in range(len(data)):
-            inds = data[ii][0]
-            outs = data[ii][1]
-            for jj in range(len(inds)):
-                results[inds[jj]] = outs[jj]
-        return results
+        return [output.value for output in self._outputs]
 
-    def _initialize_threads(self, num_cores):
+    def _initialize_threads(self, num_cores, system, state):
         """Initialize the thread pool, balancing the load across each thread."""
         fns = [stepper.step for stepper in self._steppers]
         num_steppers = len(self._steppers)
         if num_steppers % num_cores != 0:
             raise ValueError('For now, number of steppers must be a multiple of the number of cores')
 
-        steppers_per_core = int(num_steppers/num_cores)
+        steppers_per_core = num_steppers//num_cores
         if steppers_per_core % 2 != 0:
             raise ValueError('For now, number of steppers per core must be even')
 
+        self._outputs = [State(state) for ii in range(num_steppers)]
+
         def make_worker_target_fn(ii):
-            sps2 = int(steppers_per_core/2)
+            sps2 = steppers_per_core//2
             ind1 =  ii   *sps2
             ind2 = (ii+1)*sps2
             ind3 = num_steppers-(ii+1)*sps2
             ind4 = num_steppers- ii   *sps2
             inds = list(range(ind1,ind2))+list(range(ind3,ind4))
+
             def eval(*args):
                 results = [self._steppers[inds[jj]].step(*args) for jj in range(steppers_per_core)]
-                return inds, results
+                for jj in range(len(results)):
+                    self._outputs[inds[jj]].value = results[jj]
             return eval
 
         fns = [make_worker_target_fn(ii) for ii in range(num_cores)]
-        self._pool = ProcessPool(fns)
+        self._pool = ProcessPool(fns, system, state)
 

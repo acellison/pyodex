@@ -56,13 +56,13 @@ def profile_odex_simple(num_cores, fn_eval_time):
 
     # Construct the extrapolation stepper
     steppers, steps, weights = make_extrap_config()
-    stepper = odex.ExtrapolationStepper(steppers, steps, weights, num_cores)
+    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, y0, num_cores=num_cores)
 
     # Solve the system, profiling
     start = time.time()
     yn = stepper.step(system, y0, t0, dt, n)
-    stepper.join()
     duration = time.time()-start
+    stepper.join()
 
     # Compute the error, print the results
     error = yn[-1]-np.exp(t1)
@@ -99,14 +99,14 @@ def test_odex_simple():
 def profile_odex_convection(num_cores, do_plot):
     print('profiling odex: convection on num_cores == {}...'.format(num_cores))
 
-    npoints = 1024
+    npoints = 4096
     xgrid = np.linspace(0,npoints-1,npoints, dtype=np.float64)
     u0 = np.exp(-200*(xgrid/npoints-.5)**2);   # Initial data
     c  = 1.  # Wave speed
     k  = 1.  # Unit grid spacing
     t0 = 0.
     t1 = npoints
-    n  = 256
+    n  = npoints//4
     dt = float(t1-t0)/n
 
     def islope():
@@ -125,7 +125,7 @@ def profile_odex_convection(num_cores, do_plot):
     # Initial conditions and number of steps to take
     # Construct the extrapolation stepper
     steppers, steps, weights = make_extrap_config()
-    stepper = odex.ExtrapolationStepper(steppers, steps, weights, num_cores)
+    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, u0, num_cores=num_cores)
 
     # Solve the system, profiling
     start = time.time()
@@ -161,7 +161,12 @@ def profile_odex_convection(num_cores, do_plot):
     return duration
 
 
-def test_odex_convection():
+def test_odex_convection(plot_only):
+    # plot
+    if plot_only:
+        profile_odex_convection(4, True)
+        return
+
     num_cores = [1,2,4,8]
     durations = [profile_odex_convection(nc, False) for nc in num_cores]
     print('')
@@ -170,38 +175,36 @@ def test_odex_convection():
     print('')
 
 
-def main():
-    # Quick sanity check
+def sanity_check():
     profile_odex_simple(1, 0.)
     profile_odex_simple(4, 0.)
 
-    # Run the tests
-    test_odex_simple()
-    test_odex_convection()
 
+def profile(run):
+    cpus = [1, 2, 4, 8]
+    calls = []
+    filenames = []
+    for cpu in cpus:
+        calls.append('profile_odex_convection({},False)'.format(cpu))
+        filenames.append('conv_{}cpu.stats'.format(cpu))
 
-def profile():
-    run = False
     if run:
-        cProfile.run('profile_odex_simple(1,1e-5)', 'stats_simp_1cpu')
-        cProfile.run('profile_odex_simple(4,1e-5)', 'stats_simp_4cpu')
-        cProfile.run('profile_odex_simple(8,1e-5)', 'stats_simp_8cpu')
-        cProfile.run('profile_odex_convection(1,False)', 'stats_conv_1cpu')
-        cProfile.run('profile_odex_convection(4,False)', 'stats_conv_4cpu')
-        cProfile.run('profile_odex_convection(8,False)', 'stats_conv_8cpu')
+        for call, filename in zip(calls, filenames):
+            cProfile.run(call, filename)
 
-    p = pstats.Stats('stats_simp_1cpu')
-    p.strip_dirs().sort_stats('cumtime').print_stats()
+    for filename in filenames:
+        p = pstats.Stats(filename)
+        p.strip_dirs().sort_stats('cumtime').print_stats()
 
-    p = pstats.Stats('stats_simp_8cpu')
-    p.strip_dirs().sort_stats('cumtime').print_stats()
 
-    p = pstats.Stats('stats_conv_1cpu')
-    p.strip_dirs().sort_stats('cumtime').print_stats()
+def main():
+    sanity_check()
 
-    p = pstats.Stats('stats_conv_8cpu')
-    p.strip_dirs().sort_stats('cumtime').print_stats()
+#    test_odex_simple()
+#    test_odex_convection(plot_only=True)
+    profile(run=False)
+
 
 if __name__=='__main__':
-#    profile()
     main()
+
