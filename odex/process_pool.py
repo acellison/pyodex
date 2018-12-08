@@ -1,4 +1,5 @@
 import dill as pickle
+import os
 import numpy as np
 import multiprocessing as mp
 from .worker import Worker
@@ -26,9 +27,6 @@ class WorkerProcess(object):
         system = pickle.dumps(system)
         self._process = mp.Process(target=self.run, args=(self._queue, callback, system))
         self._process.start()
-
-    def __del__(self):
-        self.join()
 
     def set_args(self, args):
         """Set the arguments to be passed to the worker's target function"""
@@ -99,9 +97,6 @@ class ProcessPool(object):
 
         self._state = State(state)
         self._workers = [WorkerProcess(fns[ii], system, self._state, callback=make_callback(ii)) for ii in range(len(fns))]
-
-    def __del__(self):
-        self.join()
 
     def set_state(self, state):
         """Set the state to be passed on to the worker."""

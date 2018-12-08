@@ -1,7 +1,7 @@
 import numpy as np
 from .process_pool import ProcessPool
 from .state import State
-
+from .partition import partition
 
 class ExtrapolationStepper(object):
     def __init__(self, steppers, steps, weights, system, state, num_cores=1):
@@ -30,13 +30,10 @@ class ExtrapolationStepper(object):
             self._evalfn = self._evaluate_serial
             self._pool = None
 
-    def __del__(self):
-        self.join()
-
     def join(self):
         """Block while waiting for all threads in the pool to join.
         """
-        if self._pool:
+        if self._pool is not None:
             self._pool.join()
 
     def step(self, system, state, t, dt, n):
@@ -83,12 +80,12 @@ class ExtrapolationStepper(object):
 
         self._outputs = [State(state) for ii in range(num_steppers)]
 
-        partitions = self._partition(self._steps, num_cores)
+        partitions = partition(self._steps, num_cores)
 
         def make_worker_target_fn(ii):
-            partition = partitions[ii]
+            part = partitions[ii]
             steps = list(self._steps)
-            inds = [steps.index(p) for p in partition]
+            inds = [steps.index(p) for p in part]
             def eval(*args):
                 results = [self._steppers[ind].step(*args) for ind in inds]
                 for jj in range(len(results)):
@@ -97,29 +94,4 @@ class ExtrapolationStepper(object):
 
         fns = [make_worker_target_fn(ii) for ii in range(num_cores)]
         self._pool = ProcessPool(fns, system, state)
-
-    def _partition(self, a, k):
-        """Pseudo-Minimax partition of the thread step counts for load balance."""
-        a = sorted(a)
-        n = len(a)
-        nmodk = n%k
-        b = a[nmodk:]
-
-        if len(b)//(2*k) == 1:
-            partitions = [[bi] for bi in b]
-        else:
-            partitions = []
-            for ii in range(k):
-                m  = len(b)//(2*k)
-                i1 =  ii   *m
-                i2 = (ii+1)*m
-                i3 = len(b)-(ii+1)*m
-                i4 = len(b)- ii   *m
-                inds = list(range(i1,i2))+list(range(i3,i4))
-                partitions.append([b[ind] for ind in inds])
-
-        for ii in range(nmodk):
-            partitions[ii].insert(0,a[nmodk-1-ii])
-
-        return partitions
 
