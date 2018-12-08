@@ -84,7 +84,6 @@ class ExtrapolationStepper(object):
         self._outputs = [State(state) for ii in range(num_steppers)]
 
         partitions = self._partition(self._steps, num_cores)
-        print(partitions)
 
         def make_worker_target_fn(ii):
             partition = partitions[ii]
