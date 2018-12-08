@@ -2,7 +2,6 @@ import dill as pickle
 import os
 import numpy as np
 import multiprocessing as mp
-from .worker import Worker
 from .state import State
 
 
