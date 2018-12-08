@@ -167,7 +167,7 @@ def test_odex_convection(plot_only):
         profile_odex_convection(4, True)
         return
 
-    num_cores = [1,2,4,8]
+    num_cores = [1,2,3,4,8]
     durations = [profile_odex_convection(nc, False) for nc in num_cores]
     print('')
     for ii in range(len(num_cores)):
@@ -202,7 +202,8 @@ def main():
 
 #    test_odex_simple()
 #    test_odex_convection(plot_only=True)
-    profile(run=False)
+    test_odex_convection(plot_only=False)
+#    profile(run=True)
 
 
 if __name__=='__main__':
