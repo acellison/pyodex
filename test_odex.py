@@ -1,8 +1,11 @@
 import odex
 import time
 import numpy as np
+import numpy.fft
 import scipy as sp
+from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+import matplotlib.animation as anim
 
 import cProfile
 import pstats
@@ -33,13 +36,13 @@ def make_extrap_config():
     return steppers, steps, weights
 
 
-def profile_odex_simple(num_cores, fn_eval_time):
+def run_odex_simple(num_cores, fn_eval_time=0):
     """Test the extrapolation scheme running on a given number of cores.
        :param num_cores: Number of cores on which to run the scheme
        :param fn_eval_time: Approximate time each ODE function evaluation
                             should take to simulate different scale problems
     """
-    print('profiling odex: simple ode on num_cores == {}...'.format(num_cores))
+    print('odex: simple ode on num_cores == {}...'.format(num_cores))
 
     # ODE: y' = system(t,y)
     def system(t,y):
@@ -60,7 +63,7 @@ def profile_odex_simple(num_cores, fn_eval_time):
 
     # Solve the system, profiling
     start = time.time()
-    yn = stepper.step(system, y0, t0, dt, n)
+    yn = stepper.step(y0, t0, dt, n)
     duration = time.time()-start
     stepper.join()
 
@@ -82,22 +85,21 @@ def profile_odex_simple(num_cores, fn_eval_time):
     print('  estimated duration: {}'.format(estimated_duration))
     print('  efficiency: {0:.2f}%'.format(100*estimated_duration/duration))
 
-    # Join the stepper so that threads can synchronize and exit
     return duration
 
 
 def test_odex_simple():
     fn_eval_time = 4e-5
     num_cores = [1, 2, 4, 8]
-    durations = [profile_odex_simple(nc, fn_eval_time) for nc in num_cores]
+    durations = [run_odex_simple(nc, fn_eval_time) for nc in num_cores]
     print('')
     for ii in range(len(num_cores)):
         print('Solver Duration ({} Thread{}): {}'.format(num_cores[ii], ' ' if num_cores[ii] == 1 else 's', durations[ii]))
     print('')
 
 
-def profile_odex_convection(num_cores, do_plot):
-    print('profiling odex: convection on num_cores == {}...'.format(num_cores))
+def run_odex_convection(num_cores, do_plot):
+    print('odex: convection on num_cores == {}...'.format(num_cores))
 
     npoints = 4096
     xgrid = np.linspace(0,npoints-1,npoints, dtype=np.float64)
@@ -122,14 +124,13 @@ def profile_odex_convection(num_cores, do_plot):
         ux = specder(u, k)
         return -c*ux
 
-    # Initial conditions and number of steps to take
     # Construct the extrapolation stepper
     steppers, steps, weights = make_extrap_config()
     stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, u0, num_cores=num_cores)
 
     # Solve the system, profiling
     start = time.time()
-    un = stepper.step(system, u0, t0, dt, n)
+    un = stepper.step(u0, t0, dt, n)
     duration = time.time()-start
     stepper.join()
 
@@ -157,35 +158,29 @@ def profile_odex_convection(num_cores, do_plot):
         plt.grid()
         plt.show()
 
-    # Join the stepper so that threads can synchronize and exit
     return duration
 
 
-def test_odex_convection(plot_only):
+def test_odex_convection(plot_only=False):
     # plot
     if plot_only:
-        profile_odex_convection(4, True)
-        return
+        num_cores = [4]
+    else:
+        num_cores = range(2,9)
 
-    num_cores = range(2,9)
-    durations = [profile_odex_convection(nc, False) for nc in num_cores]
+    durations = [run_odex_convection(nc, plot_only) for nc in num_cores]
     print('')
     for ii in range(len(num_cores)):
         print('Solver Duration ({} Thread{}): {}'.format(num_cores[ii], ' ' if num_cores[ii] == 1 else 's', durations[ii]))
     print('')
 
 
-def sanity_check():
-    for i in range(1,10):
-        profile_odex_simple(i, 0.)
-
-
-def profile(run):
+def profile_odex_convection(run):
     cpus = [1, 2, 4, 8]
     calls = []
     filenames = []
     for cpu in cpus:
-        calls.append('profile_odex_convection({},False)'.format(cpu))
+        calls.append('run_odex_convection({},False)'.format(cpu))
         filenames.append('conv_{}cpu.stats'.format(cpu))
 
     if run:
@@ -197,13 +192,150 @@ def profile(run):
         p.strip_dirs().sort_stats('cumtime').print_stats()
 
 
+def run_odex_convection_2d(num_cores, do_plot, outfile=None):
+    print('odex: 2D convection on num_cores == {}...'.format(num_cores))
+
+    # PDE initial data
+    npoints = 256
+    xx = np.linspace(0,npoints-1,npoints, dtype=np.float64)
+    xx,yy = np.meshgrid(xx,xx)
+    u0 = np.exp(-60*((xx/npoints-.5)**2+(yy/npoints-.5)**2))
+
+    # PDE and solver parameters
+    c  = [0.5, 0.25]     # Wave speed
+    k  = 1.              # Unit grid spacing
+    t0 = 0.              # Simulation start time
+    if outfile:
+        t1 = 4*npoints   # Simulation end time
+    else:
+        t1 = npoints//2  # Simulation end time
+    n  = t1//4           # Number of points
+    dt = float(t1-t0)/n  # Time step size
+
+    # Movie writer setup
+    if outfile is not None:
+        moviewriter = anim.FFMpegWriter(fps=30)
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        moviewriter.setup(fig, outfile, dpi=100)
+
+        def observer(t,state):
+            ax.clear()
+            ax.plot_wireframe(xx, yy, state)
+            ax.set_zlim(0,1)
+            moviewriter.grab_frame()
+    else:
+        observer = None
+
+    # Spatial derivative helper
+    def islope():
+        n  = len(u0);
+        kn = 2.*np.pi/n/k;
+        iw = 1j*kn*np.array(list(range(0, int(n/2)+1)) + list(range(-int(n/2)+1,0)))
+        return np.meshgrid(iw,iw)
+    ikx,iky = islope()
+
+    def gradient(u, k):
+        U = np.fft.fft2(u)
+        return np.real(np.fft.ifft2(ikx*U)), np.real(np.fft.ifft2(iky*U))
+
+    # PDE system: transport
+    def system(t, u):
+        ux,uy = gradient(u, k)
+        ut = -c[0]*ux-c[1]*uy
+        return ut
+
+    # Construct the extrapolation stepper
+    steppers, steps, weights = make_extrap_config()
+    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, u0, num_cores=num_cores)
+
+    # Solve the system, profiling
+    start = time.time()
+    un = stepper.step(u0, t0, dt, n, dense_output=None, observer=observer)
+    duration = time.time()-start
+    stepper.join()
+
+    if outfile is not None:
+        moviewriter.finish()
+        plt.close()
+
+    # Compute the error, print the results
+    print('  duration: {}'.format(duration))
+
+    # Compute the mean evaluation time of the PDE system
+    iters = 100
+    mean_eval_time = 0
+    for ii in range(iters):
+        start = time.time()
+        system(t0,u0)
+        mean_eval_time += time.time()-start
+    mean_eval_time /= iters
+
+    # Print the profiling results
+    estimated_duration = n*np.sum(np.array(steps)+1)*mean_eval_time
+    print('  mean eval duration: {}'.format(mean_eval_time))
+    print('  estimated duration: {}'.format(estimated_duration))
+    print('  efficiency: {0:.2f}%'.format(100*estimated_duration/duration))
+
+    # Plot initial and final transport results
+    if do_plot:
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        ax.plot_wireframe(xx, yy, u0)
+
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        ax.plot_wireframe(xx, yy, un)
+
+        plt.grid()
+        plt.show()
+
+    return duration
+
+
+def test_odex_convection_2d(plot_only=False):
+    if plot_only:
+        num_cores = [4]
+    else:
+        num_cores = range(1,5)
+
+    durations = [run_odex_convection_2d(nc, plot_only) for nc in num_cores]
+    print('')
+    for ii in range(len(num_cores)):
+        print('Solver Duration ({} Thread{}): {}'.format(num_cores[ii], ' ' if num_cores[ii] == 1 else 's', durations[ii]))
+    print('')
+
+
+def profile_odex_convection_2d(run):
+    cpus = [1, 2, 4]
+    calls = []
+    filenames = []
+    for cpu in cpus:
+        calls.append('run_odex_convection_2d({},False)'.format(cpu))
+        filenames.append('conv2d_{}cpu.stats'.format(cpu))
+
+    if run:
+        for call, filename in zip(calls, filenames):
+            cProfile.run(call, filename)
+
+    for filename in filenames:
+        p = pstats.Stats(filename)
+        p.strip_dirs().sort_stats('cumtime').print_stats()
+
+
+def sanity_check():
+    for num_cores in range(1,10):
+        run_odex_simple(num_cores)
+
+
 def main():
     sanity_check()
+#    test_odex_convection()
+    test_odex_convection_2d()
 
-#    test_odex_simple()
-#    test_odex_convection(plot_only=True)
-    test_odex_convection(plot_only=True)
-#    profile(run=True)
+    # 2D convection
+#    run_odex_convection_2d(4, False, outfile='convection2d.mp4')
+#    profile_odex_convection_2d(True)
 
 
 if __name__=='__main__':

@@ -19,8 +19,11 @@ class ExtrapolationStepper(object):
         # Sort the time steppers by step counts
         indices = np.argsort(steps)
         self._steppers = [steppers[index] for index in indices]
+        for stepper in self._steppers:
+            stepper.resize(state)
         self._steps = np.array(steps)[indices]
         self._weights = np.array(weights)[indices]
+        self._system = system
 
         self._num_cores = num_cores
         if num_cores > 1:
@@ -36,22 +39,45 @@ class ExtrapolationStepper(object):
         if self._pool is not None:
             self._pool.join()
 
-    def step(self, system, state, t, dt, n):
+    def step(self, state, t, dt, n, dense_output=True, observer=None):
         """Time step the extrapolation scheme n times, returning output from each time point.
            :param system: callable ODE to time step, where y\'=system(t,state)
            :param state: state of the system
            :param t: time of the evaluation
            :param dt: time step size
            :param n: number of time steps
+           :param dense_output: if true, return the output after each time step.  Otherwise,
+                                just return the final output after n time steps.
+           :param observer: Callable with signature observer(t,state).  Can be used to store
+                            output after each time step, or as a movie plotting utility.
         """
         evalfn  = self._evalfn
         weights = self._weights
-        output  = np.empty((n, *np.shape(state)))
+        system  = self._system
+        if dense_output:
+            output  = np.empty((n, *np.shape(state)))
+        state = np.copy(state)
+
         for ii in range(n):
-            results    = evalfn(system, state, t, dt)
-            state      = np.dot(weights, results)
-            output[ii] = state
-            t          = t+dt
+            # Compute the output at time t+dt across all threads
+            results = evalfn(system, state, t, dt)
+
+            # Extrapolate the outputs
+            if np.ndim(state) >= 1:
+                np.dot(np.moveaxis(results,0,-1), weights, out=state)
+            else:
+                state = np.dot(weights, results)
+
+            # If dense output is requested, store it
+            if dense_output: output[ii] = state
+
+            # If we have an observer, call it
+            if observer: observer(t, state)
+
+            # Increment the time index
+            t = t+dt
+        if not dense_output:
+            output = state
         return output
 
     def _evaluate_serial(self, system, state, t, dt):
@@ -87,9 +113,10 @@ class ExtrapolationStepper(object):
             steps = list(self._steps)
             inds = [steps.index(p) for p in part]
             def eval(*args):
-                results = [self._steppers[ind].step(*args) for ind in inds]
-                for jj in range(len(results)):
-                    self._outputs[inds[jj]].value = results[jj]
+                for jj in range(len(inds)):
+                    ind = inds[jj]
+                    stepper = self._steppers[ind]
+                    stepper.step(*args, output=self._outputs[ind])
             return eval
 
         fns = [make_worker_target_fn(ii) for ii in range(num_cores)]

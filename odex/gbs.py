@@ -2,6 +2,7 @@ import numpy as np
 
 
 class GBS(object):
+
     def __init__(self, n):
         """Initialize the GBS time stepper
            :param n: number of subintervals.  must be even
@@ -9,29 +10,44 @@ class GBS(object):
         if n%2 != 0:
             raise ValueError('n must be even!')
         self._n = n
+        self._state = None
 
-    def step(self, system, state, t, dt):
+    def resize(self, state):
+        self._state = np.zeros((3,*np.shape(state)))
+
+    def step(self, system, state, t, dt, output=None):
         """Step the system forward one time step.
            :param system: callable ODE to time step, where y\'=system(t,state)
            :param state: state of the system
            :param t: time of the evaluation
            :param dt: time step size
         """
-        n = self._n
-        dt = dt/n
+        n  = self._n
+        t  = float(t)
+        dt = float(dt)/n
+
+        s = self._state
 
         # Initial state
-        s1 = state
+        s[0] = state
 
         # Forward Euler step
-        s2 = state+dt*system(t,state)
+        s[1] = s[0]+dt*system(t,s[0])
 
         # Leap Frog iteration
+        indices = [[0, 1, 2], [1, 2, 0], [2, 0, 1]]
+        cur = 0
         for ii in range(n):
-            s0 = s1
-            s1 = s2
-            s2 = s0 + 2*dt*system(t,s1)
+            inds = indices[cur]
+            s[inds[2]] = s[inds[0]] + 2*dt*system(t,s[inds[1]])
+
+            cur = cur+1 if cur < 2 else 0
 
         # Smoothing step
-        return .25*(s0+2*s1+s2)
+        if output is None:
+            return .25*(s[inds[0]]+2*s[inds[1]]+s[inds[2]])
+        else:
+            # FIXME: output.value needed here for State object.  Add
+            # operator overload to class State to make the assignment work.
+            output.value = .25*(s[inds[0]]+2*s[inds[1]]+s[inds[2]])
 
