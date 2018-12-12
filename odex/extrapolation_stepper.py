@@ -1,6 +1,6 @@
 import numpy as np
 from .process_pool import ProcessPool
-from .state import State
+from .shared_state import SharedState
 from .partition import partition
 
 class ExtrapolationStepper(object):
@@ -104,7 +104,7 @@ class ExtrapolationStepper(object):
         fns = [stepper.step for stepper in self._steppers]
         num_steppers = len(self._steppers)
 
-        self._outputs = [State(state) for ii in range(num_steppers)]
+        self._outputs = [SharedState(state) for ii in range(num_steppers)]
 
         partitions = partition(self._steps, num_cores)
 
@@ -116,7 +116,7 @@ class ExtrapolationStepper(object):
                 for jj in range(len(inds)):
                     ind = inds[jj]
                     stepper = self._steppers[ind]
-                    stepper.step(*args, output=self._outputs[ind])
+                    self._outputs[ind].value = stepper.step(*args)
             return eval
 
         fns = [make_worker_target_fn(ii) for ii in range(num_cores)]

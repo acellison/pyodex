@@ -15,7 +15,7 @@ class GBS(object):
     def resize(self, state):
         self._state = np.zeros((3,*np.shape(state)))
 
-    def step(self, system, state, t, dt, output=None):
+    def step(self, system, state, t, dt):
         """Step the system forward one time step.
            :param system: callable ODE to time step, where y\'=system(t,state)
            :param state: state of the system
@@ -44,10 +44,5 @@ class GBS(object):
             cur = cur+1 if cur < 2 else 0
 
         # Smoothing step
-        if output is None:
-            return .25*(s[inds[0]]+2*s[inds[1]]+s[inds[2]])
-        else:
-            # FIXME: output.value needed here for State object.  Add
-            # operator overload to class State to make the assignment work.
-            output.value = .25*(s[inds[0]]+2*s[inds[1]]+s[inds[2]])
+        return .25*(s[inds[0]]+2*s[inds[1]]+s[inds[2]])
 

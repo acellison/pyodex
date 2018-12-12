@@ -166,8 +166,9 @@ def test_odex_convection(plot_only=False):
     if plot_only:
         num_cores = [4]
     else:
-        num_cores = range(2,9)
+        num_cores = range(1,5)
 
+    print('')
     durations = [run_odex_convection(nc, plot_only) for nc in num_cores]
     print('')
     for ii in range(len(num_cores)):
@@ -196,7 +197,7 @@ def run_odex_convection_2d(num_cores, do_plot, outfile=None):
     print('odex: 2D convection on num_cores == {}...'.format(num_cores))
 
     # PDE initial data
-    npoints = 256
+    npoints = 64
     xx = np.linspace(0,npoints-1,npoints, dtype=np.float64)
     xx,yy = np.meshgrid(xx,xx)
     u0 = np.exp(-60*((xx/npoints-.5)**2+(yy/npoints-.5)**2))
@@ -208,7 +209,7 @@ def run_odex_convection_2d(num_cores, do_plot, outfile=None):
     if outfile:
         t1 = 4*npoints   # Simulation end time
     else:
-        t1 = npoints//2  # Simulation end time
+        t1 = 32*npoints   # Simulation end time
     n  = t1//4           # Number of points
     dt = float(t1-t0)/n  # Time step size
 
@@ -227,17 +228,36 @@ def run_odex_convection_2d(num_cores, do_plot, outfile=None):
     else:
         observer = None
 
-    # Spatial derivative helper
+    # Spectral gradient helper
     def islope():
-        n  = len(u0);
-        kn = 2.*np.pi/n/k;
+        n   = len(u0);
+        kn  = 2.*np.pi/n/k;
         iw = 1j*kn*np.array(list(range(0, int(n/2)+1)) + list(range(-int(n/2)+1,0)))
-        return np.meshgrid(iw,iw)
-    ikx,iky = islope()
+        return np.meshgrid(iw, iw)
+    ikx, iky = islope()
 
-    def gradient(u, k):
+    def spectral_gradient(u, k):
         U = np.fft.fft2(u)
         return np.real(np.fft.ifft2(ikx*U)), np.real(np.fft.ifft2(iky*U))
+
+    def central_difference(u, k):
+        n  = len(u)
+        ux = np.empty(np.shape(u))
+        uy = np.empty(np.shape(u))
+
+        ux[:,1:n-1] = (u[:,2:n]-u[:,:n-2])/(2*k)
+        ux[:,0    ] = (u[:,1  ]-u[:, n-1])/(2*k)
+        ux[:,n-1  ] = (u[:,0  ]-u[:, n-2])/(2*k)
+
+        uy[1:n-1,:] = (u[2:n,:]-u[:n-2,:])/(2*k)
+        uy[0,    :] = (u[1,  :]-u[ n-1,:])/(2*k)
+        uy[n-1,  :] = (u[0,  :]-u[ n-2,:])/(2*k)
+
+        return ux, uy
+
+    def gradient(u, k):
+        return spectral_gradient(u, k)
+#        return central_difference(u, k)
 
     # PDE system: transport
     def system(t, u):
@@ -297,8 +317,9 @@ def test_odex_convection_2d(plot_only=False):
     if plot_only:
         num_cores = [4]
     else:
-        num_cores = range(1,5)
+        num_cores = range(2,5)
 
+    print('')
     durations = [run_odex_convection_2d(nc, plot_only) for nc in num_cores]
     print('')
     for ii in range(len(num_cores)):
@@ -328,9 +349,15 @@ def sanity_check():
         run_odex_simple(num_cores)
 
 
+def print_profile():
+    filename = 'worker_8.prof'
+    p = pstats.Stats(filename)
+    p.strip_dirs().sort_stats('cumtime').print_stats()
+
+
 def main():
     sanity_check()
-#    test_odex_convection()
+    test_odex_convection()
     test_odex_convection_2d()
 
     # 2D convection
@@ -340,4 +367,5 @@ def main():
 
 if __name__=='__main__':
     main()
+#    print_profile()
 

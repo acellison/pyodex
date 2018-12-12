@@ -2,11 +2,16 @@ import dill as pickle
 import os
 import numpy as np
 import multiprocessing as mp
-from .state import State
+import cProfile
+from .shared_state import SharedState
 
+
+def worker_dispatch(worker, *args):
+    return worker.run(*args)
 
 class WorkerProcess(object):
-    def __init__(self, target, system, state, callback=None):
+    worker_count = 0
+    def __init__(self, target, system, state, callback=None, profile=False):
         """Construct the worker process with a target function and optional
            arguments and callback.  When notified, the target function is
            evaluated, then the callback is called with the result.  This enables
@@ -24,7 +29,16 @@ class WorkerProcess(object):
         self._queue = mp.Queue()
         self._state = state
         system = pickle.dumps(system)
-        self._process = mp.Process(target=self.run, args=(self._queue, callback, system))
+
+        if profile:
+            def target(*args):
+                cProfile.runctx('worker_dispatch(*args)', globals(), locals(), 'worker_{}.prof'.format(WorkerProcess.worker_count))
+            WorkerProcess.worker_count += 1
+            args=(self, self._queue, callback, system)
+        else:
+            target = self.run
+            args=(self._queue, callback, system)
+        self._process = mp.Process(target=target, args=args)
         self._process.start()
 
     def set_args(self, args):
@@ -94,7 +108,7 @@ class ProcessPool(object):
                         self._event.set()
             return cb
 
-        self._state = State(state)
+        self._state = SharedState(state)
         self._workers = [WorkerProcess(fns[ii], system, self._state, callback=make_callback(ii)) for ii in range(len(fns))]
 
     def set_state(self, state):
@@ -131,3 +145,4 @@ class ProcessPool(object):
         # Wait for the workers to finish
         self._event.wait()
         self._event.clear()
+
