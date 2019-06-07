@@ -195,6 +195,8 @@ def profile_odex_convection(run):
 
 def run_odex_convection_2d(num_cores, do_plot, outfile=None):
     print('odex: 2D convection on num_cores == {}...'.format(num_cores))
+    steppers, steps, weights = make_extrap_config()
+    iso = 0.85
 
     # PDE initial data
     npoints = 64
@@ -206,12 +208,13 @@ def run_odex_convection_2d(num_cores, do_plot, outfile=None):
     c  = [0.5, 0.25]     # Wave speed
     k  = 1.              # Unit grid spacing
     t0 = 0.              # Simulation start time
-    if outfile:
-        t1 = 4*npoints   # Simulation end time
-    else:
-        t1 = 32*npoints   # Simulation end time
-    n  = t1//4           # Number of points
-    dt = float(t1-t0)/n  # Time step size
+    nsteps = 2048        # Number of time steps
+    spectral = False
+
+    # Set up maximum time step size
+    hmax = k*max(steps)*iso/(2*max(c));
+    if spectral: hmax = hmax/np.pi
+    dt = hmax*.5
 
     # Movie writer setup
     if outfile is not None:
@@ -255,9 +258,13 @@ def run_odex_convection_2d(num_cores, do_plot, outfile=None):
 
         return ux, uy
 
+    if spectral:
+        derivfn = spectral_gradient
+    else:
+        derivfn = central_difference
+
     def gradient(u, k):
-        return spectral_gradient(u, k)
-#        return central_difference(u, k)
+        return derivfn(u, k)
 
     # PDE system: transport
     def system(t, u):
@@ -266,12 +273,14 @@ def run_odex_convection_2d(num_cores, do_plot, outfile=None):
         return ut
 
     # Construct the extrapolation stepper
-    steppers, steps, weights = make_extrap_config()
     stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, u0, num_cores=num_cores)
+
+    # Step the system once to ensure one-time setup completes before profiling
+    stepper.step(u0, t0, dt, 1, dense_output=None, observer=None)
 
     # Solve the system, profiling
     start = time.time()
-    un = stepper.step(u0, t0, dt, n, dense_output=None, observer=observer)
+    un = stepper.step(u0, t0, dt, nsteps, dense_output=None, observer=observer)
     duration = time.time()-start
     stepper.join()
 
@@ -292,7 +301,7 @@ def run_odex_convection_2d(num_cores, do_plot, outfile=None):
     mean_eval_time /= iters
 
     # Print the profiling results
-    estimated_duration = n*np.sum(np.array(steps)+1)*mean_eval_time
+    estimated_duration = nsteps*np.sum(np.array(steps)+1)*mean_eval_time
     print('  mean eval duration: {}'.format(mean_eval_time))
     print('  estimated duration: {}'.format(estimated_duration))
     print('  efficiency: {0:.2f}%'.format(100*estimated_duration/duration))
@@ -317,7 +326,7 @@ def test_odex_convection_2d(plot_only=False):
     if plot_only:
         num_cores = [4]
     else:
-        num_cores = range(2,5)
+        num_cores = range(1,5)
 
     print('')
     durations = [run_odex_convection_2d(nc, plot_only) for nc in num_cores]
@@ -357,7 +366,7 @@ def print_profile():
 
 def main():
     sanity_check()
-    test_odex_convection()
+#    test_odex_convection()
     test_odex_convection_2d()
 
     # 2D convection
