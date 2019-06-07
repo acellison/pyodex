@@ -36,12 +36,13 @@ class GBS(object):
 
         # Leap Frog iteration
         indices = [[0, 1, 2], [1, 2, 0], [2, 0, 1]]
-        cur = 0
+        cur = 2
         for ii in range(n):
+            cur = cur+1 if cur < 2 else 0
+            t   = t+dt
+
             inds = indices[cur]
             s[inds[2]] = s[inds[0]] + 2*dt*system(t,s[inds[1]])
-
-            cur = cur+1 if cur < 2 else 0
 
         # Smoothing step
         return .25*(s[inds[0]]+2*s[inds[1]]+s[inds[2]])
