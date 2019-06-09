@@ -82,7 +82,8 @@ class ExtrapolationStepper(object):
 
     def _evaluate_serial(self, system, state, t, dt):
         """Evaluate the time steppers in the current thread."""
-        return [stepper.step(system, state, t, dt) for stepper in self._steppers]
+        fval0 = system(t,state)
+        return [stepper.step(system, state, t, dt, fval0) for stepper in self._steppers]
 
     def _evaluate_parallel(self, system, state, t, dt):
         """Evaluate the time steppers in parallel across the pool."""
@@ -112,11 +113,12 @@ class ExtrapolationStepper(object):
             part = partitions[ii]
             steps = list(self._steps)
             inds = [steps.index(p) for p in part]
-            def eval(*args):
+            def eval(system, state, t, dt):
+                fval0 = system(t,state)
                 for jj in range(len(inds)):
                     ind = inds[jj]
                     stepper = self._steppers[ind]
-                    self._outputs[ind].value = stepper.step(*args)
+                    self._outputs[ind].value = stepper.step(system, state, t, dt, fval0)
             return eval
 
         fns = [make_worker_target_fn(ii) for ii in range(num_cores)]

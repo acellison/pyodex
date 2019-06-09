@@ -15,12 +15,13 @@ class GBS(object):
     def resize(self, state):
         self._state = np.zeros((3,*np.shape(state)))
 
-    def step(self, system, state, t, dt):
+    def step(self, system, state, t, dt, fval0=None):
         """Step the system forward one time step.
            :param system: callable ODE to time step, where y\'=system(t,state)
            :param state: state of the system
            :param t: time of the evaluation
            :param dt: time step size
+           :param fval0: (optional) first function evaluation
         """
         n  = self._n
         t  = float(t)
@@ -32,7 +33,10 @@ class GBS(object):
         s[0] = state
 
         # Forward Euler step
-        s[1] = s[0]+dt*system(t,s[0])
+        if fval0 is None:
+            s[1] = s[0]+dt*system(t,s[0])
+        else:
+            s[1] = s[0]+dt*fval0
 
         # Leap Frog iteration
         indices = [[0, 1, 2], [1, 2, 0], [2, 0, 1]]
