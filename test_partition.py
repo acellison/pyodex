@@ -3,7 +3,11 @@ import numpy as np
    
 def print_best_partition(a, k):
     print('Partitioning {0} into {1} partitions'.format(a, k))
-    p = partition.partition(a, k)
+    try:
+        p = partition.partition(a, k)
+    except ValueError:
+        print('    Partition failed')
+        return
 
     found = np.zeros(len(a))
     for sub in p:
@@ -19,7 +23,10 @@ def print_best_partition(a, k):
 
 
 def main():
-    a = list(range(2,34,2))
+    a = list(range(2,14,2))
+    for k in range(2,len(a)+1):
+        print_best_partition(a, k)
+    a = list(range(2,16,2))
     for k in range(2,len(a)+1):
         print_best_partition(a, k)
 

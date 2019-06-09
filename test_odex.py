@@ -324,7 +324,7 @@ def run_odex_convection_2d(num_cores, do_plot, outfile=None):
 
 def test_odex_convection_2d(plot_only=False):
     if plot_only:
-        num_cores = [4]
+        num_cores = [9]
     else:
         num_cores = range(1,5)
 
@@ -354,8 +354,7 @@ def profile_odex_convection_2d(run):
 
 
 def sanity_check():
-    for num_cores in range(1,10):
-        run_odex_simple(num_cores)
+    run_odex_simple(9)
 
 
 def print_profile():
@@ -367,7 +366,7 @@ def print_profile():
 def main():
     sanity_check()
 #    test_odex_convection()
-    test_odex_convection_2d()
+    test_odex_convection_2d(True)
 
     # 2D convection
 #    run_odex_convection_2d(4, False, outfile='convection2d.mp4')
