@@ -10,12 +10,10 @@ class SharedState_Memmap(object):
             self._file = tempfile.TemporaryFile()
             self._value = np.memmap(self._file, dtype=dtype(value), mode='r+', shape=np.shape([value]))
 
-        @property
-        def value(self):
+        def read(self):
             return self._value[0]
 
-        @value.setter
-        def value(self, v):
+        def write(self, v):
             self._value[0] = v
 
     class Array(object):
@@ -23,12 +21,10 @@ class SharedState_Memmap(object):
             self._file = tempfile.TemporaryFile()
             self._value = np.memmap(self._file, dtype=dtype(value), mode='r+', shape=np.shape(value))
 
-        @property
-        def value(self):
+        def read(self):
             return self._value
 
-        @value.setter
-        def value(self, v):
+        def write(self, v):
             self._value[:] = v
 
     def __init__(self, value):
@@ -47,12 +43,10 @@ class SharedState_RawValue(object):
             self._rawvalue = mp.RawArray('d', 1)
             self._value = np.array(self._rawvalue, copy=False)
 
-        @property
-        def value(self):
+        def read(self):
             return self._value[0]
 
-        @value.setter
-        def value(self, v):
+        def write(self, v):
             self._value[0] = v
 
     class Array(object):
@@ -62,12 +56,10 @@ class SharedState_RawValue(object):
             self._rawvalue = mp.RawArray('d', np.reshape(value,np.prod(shape)))
             self._value = np.array(self._rawvalue, copy=False).reshape(shape)
 
-        @property
-        def value(self):
+        def read(self):
             return self._value
 
-        @value.setter
-        def value(self, v):
+        def write(self, v):
             self._value[:] = v
 
     def __init__(self, value):

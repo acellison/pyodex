@@ -77,7 +77,7 @@ class WorkerProcess(object):
             callback(self._fn(system, state, *args))
 
     def state(self):
-        return self._state.value
+        return self._state.read()
 
 
 class ProcessPool(object):
@@ -113,7 +113,7 @@ class ProcessPool(object):
 
     def set_state(self, state):
         """Set the state to be passed on to the worker."""
-        self._state.value = state
+        self._state.write(state)
 
     def set_args(self, index, args):
         """Set the argument tuple to be called by the target function at index

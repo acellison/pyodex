@@ -124,7 +124,7 @@ class ExtrapolationStepper(object):
         self._pool.synchronize()
 
         # Combine the partially extrapolated thread worker results
-        return sum([output.value for output in self._outputs])
+        return sum([output.read() for output in self._outputs])
 
     def _initialize_threads(self, system, state):
         """Initialize the thread pool, balancing the load across each thread."""
@@ -162,7 +162,7 @@ class ExtrapolationStepper(object):
                     result += weight*stepper.step(system, state, t, dt, fval0)
 
                 # Send back the data
-                self._outputs[ii].value = result
+                self._outputs[ii].write(result)
 
             return eval
 
