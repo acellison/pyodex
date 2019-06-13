@@ -1,13 +1,14 @@
 import multiprocessing as mp
 import numpy as np
 import tempfile
+from .dtype import dtype
 
 
 class SharedState_Memmap(object):
     class Value(object):
         def __init__(self, value):
             self._file = tempfile.TemporaryFile()
-            self._value = np.memmap(self._file, dtype=float, mode='r+', shape=np.shape([value]))
+            self._value = np.memmap(self._file, dtype=dtype(value), mode='r+', shape=np.shape([value]))
 
         @property
         def value(self):
@@ -20,7 +21,7 @@ class SharedState_Memmap(object):
     class Array(object):
         def __init__(self, value):
             self._file = tempfile.TemporaryFile()
-            self._value = np.memmap(self._file, dtype=float, mode='r+', shape=np.shape(value))
+            self._value = np.memmap(self._file, dtype=dtype(value), mode='r+', shape=np.shape(value))
 
         @property
         def value(self):
@@ -40,6 +41,7 @@ class SharedState_Memmap(object):
 
 class SharedState_RawValue(object):
     class Value(object):
+        # Fixme:  make data-type aware
         def __init__(self, value):
             shape = np.shape(value)
             self._rawvalue = mp.RawArray('d', 1)
@@ -54,6 +56,7 @@ class SharedState_RawValue(object):
             self._value[0] = v
 
     class Array(object):
+        # Fixme:  make data-type aware
         def __init__(self, value):
             shape = np.shape(value)
             self._rawvalue = mp.RawArray('d', np.reshape(value,np.prod(shape)))
@@ -75,9 +78,10 @@ class SharedState_RawValue(object):
         self.__init__(value)
 
 
-#SharedState = SharedState_Memmap
+SharedState = SharedState_Memmap
 
 # Using mp.RawValue as the underlying process data transfer scheme seems to be
-# more performant the the numpy.memmap
-SharedState = SharedState_RawValue
+# more performant the the numpy.memmap.  Since it is not yet data-type aware
+# we disable it for now.
+#SharedState = SharedState_RawValue
 

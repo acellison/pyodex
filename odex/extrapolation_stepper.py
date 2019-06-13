@@ -1,17 +1,18 @@
 import numpy as np
 from .process_pool import ProcessPool
 from .shared_state import SharedState
-from .partition import partition
+from .partition import equipartition
+from .dtype import dtype
 
 class ExtrapolationStepper(object):
-    def __init__(self, steppers, steps, weights, system, state, num_cores=1):
+    def __init__(self, steppers, steps, weights, system, state, parallel=False):
         """Initialize the ExtrapolationStepper
            :param steppers: list of underlying time steppers
            :param steps: step counts for each stepper in the extrapolation scheme
            :param weights: weights for each stepper in the scheme
            :param system: ODE system to time step
-           :param state: state type returned by the time stepper
-           :param num_cores: number of cores on which to evaluate the scheme
+           :param state: value of type returned by the time stepper
+           :param parallel: run the algorithm distributed across cores
         """
         if len(steppers) != len(steps) or len(steppers) != len(weights):
             raise ValueError('number of steppers, step counts, and weights must all match!')
@@ -25,10 +26,10 @@ class ExtrapolationStepper(object):
         self._weights = np.array(weights)[indices]
         self._system = system
 
-        self._num_cores = num_cores
-        if num_cores > 1:
+        # Set up the evaluation context
+        if parallel:
             self._evalfn = self._evaluate_parallel
-            self._initialize_threads(num_cores, system, state)
+            self._initialize_threads(system, state)
         else:
             self._evalfn = self._evaluate_serial
             self._pool = None
@@ -52,22 +53,16 @@ class ExtrapolationStepper(object):
                             output after each time step, or as a movie plotting utility.
         """
         evalfn  = self._evalfn
-        weights = self._weights
         system  = self._system
         if dense_output:
-            output  = np.empty((n, *np.shape(state)))
+            output  = np.empty((n, *np.shape(state)),dtype=dtype(state))
         state = np.copy(state)
 
         for ii in range(n):
             # Compute the output at time t+dt across all threads
-            results = evalfn(system, state, t, dt)
+            state = evalfn(system, state, t, dt)
 
             # Extrapolate the outputs
-            if np.ndim(state) >= 1:
-                np.dot(np.moveaxis(results,0,-1), weights, out=state)
-            else:
-                state = np.dot(weights, results)
-
             # If dense output is requested, store it
             if dense_output: output[ii] = state
 
@@ -82,8 +77,19 @@ class ExtrapolationStepper(object):
 
     def _evaluate_serial(self, system, state, t, dt):
         """Evaluate the time steppers in the current thread."""
+        # Compute the first function value to share across all steppers
         fval0 = system(t,state)
-        return [stepper.step(system, state, t, dt, fval0) for stepper in self._steppers]
+
+        # Time step each stepper
+        results = [stepper.step(system, state, t, dt, fval0) for stepper in self._steppers]
+
+        # Extrapolate the results
+        weights = self._weights
+        if np.ndim(state) >= 1:
+            np.dot(np.moveaxis(results,0,-1), weights, out=state)
+        else:
+            state = np.dot(weights, results)
+        return state
 
     def _evaluate_parallel(self, system, state, t, dt):
         """Evaluate the time steppers in parallel across the pool."""
@@ -97,30 +103,52 @@ class ExtrapolationStepper(object):
         # Access the pool data, blocking until synchronized
         self._pool.synchronize()
 
-        # Merge the thread worker results into a single array
-        return [output.value for output in self._outputs]
+        # Combine the partially extrapolated thread worker results
+        return sum([output.value for output in self._outputs])
 
-    def _initialize_threads(self, num_cores, system, state):
+    def _initialize_threads(self, system, state):
         """Initialize the thread pool, balancing the load across each thread."""
-        fns = [stepper.step for stepper in self._steppers]
-        num_steppers = len(self._steppers)
+        # Compute the optimal partitioning to balance load
+        partitions = equipartition(self._steps)
 
-        self._outputs = [SharedState(state) for ii in range(num_steppers)]
-
-        partitions = partition(self._steps, num_cores)
+        # Each core shares its output with the main thread
+        num_cores = len(partitions)
+        self._outputs = [SharedState(state) for ii in range(num_cores)]
 
         def make_worker_target_fn(ii):
+            # Each core will run the function returned from here.
+            # Cores run the time steppers specified by the equipartition,
+            # and partially extrapolate the data to minimize data sharing
+            # across cores.
             part = partitions[ii]
             steps = list(self._steps)
             inds = [steps.index(p) for p in part]
+
             def eval(system, state, t, dt):
+                # Compute the first function value
                 fval0 = system(t,state)
+
+                # Zero out the output
+                result = np.zeros_like(state)
+
+                # Run the steppers on this core in series
                 for jj in range(len(inds)):
+                    # Grab the appropriate stepper and extrapolation weight
                     ind = inds[jj]
+                    weight = self._weights[ind]
                     stepper = self._steppers[ind]
-                    self._outputs[ind].value = stepper.step(system, state, t, dt, fval0)
+
+                    # Evaluate the stepper and apply extrapolation weight
+                    result += weight*stepper.step(system, state, t, dt, fval0)
+
+                # Send back the data
+                self._outputs[ii].value = result
+
             return eval
 
+        # Create the worker functions
         fns = [make_worker_target_fn(ii) for ii in range(num_cores)]
+
+        # Instantiate the process pool to manage the workers
         self._pool = ProcessPool(fns, system, state)
 

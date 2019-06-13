@@ -8,99 +8,109 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as anim
 
 
-def make_extrap_config(label=None):
-    if label is None:
-        label = 'GBS_8,3'
+def make_extrap_config(config=None):
+    if config is None:
+        config = {'order':8, 'cores':3}
 
-    if label=='GBS_8,3':
-        steps = [2, 16, 18, 20]
-        weights = odex.compute_rextrap_weights(steps)
-        weights = np.array(weights).astype(np.float64)
-        steppers = [odex.GBS(step) for step in steps]
-        num_cores = 3
-        isb = 0.5799
+    order = config['order']
+    cores = config['cores']
+    steps = None
 
-    elif label=='GBS_12,4':
-        steps = [2, 8, 12, 14, 16, 20]
-        weights = odex.compute_rextrap_weights(steps)
-        weights = np.array(weights).astype(np.float64)
-        steppers = [odex.GBS(step) for step in steps]
-        num_cores = 4
-        isb = 0.4515
+    if order == 8:
+        if cores == 3:
+            steps = [2, 16, 18, 20]
+            weights = odex.compute_rextrap_weights(steps)
+            weights = np.array(weights).astype(np.float64)
+            isb = 0.5799
 
-    elif label=='GBS_16,5':
-        steps = [2, 8, 10, 12, 14, 16, 18, 22]
-        weights = odex.compute_rextrap_weights(steps)
-        weights = np.array(weights).astype(np.float64)
-        steppers = [odex.GBS(step) for step in steps]
-        num_cores = 5
-        isb = 0.4162
+        elif cores == 6:
+            ndep = [2, 4, 6, 10]
+            nfree = [8, 12, 14, 16, 18, 20, 22]
+            cfree = ['269/95360', '13805/611712', '83/1314', '3607/16544',
+                     '2196/619', '-35962/2395', '7352/605']
+            cdep = odex.compute_rextrap_weights(ndep, nfree, cfree)
+            cdep = np.array(cdep).astype(np.float64)
 
-    elif label=='GBS_8,6':
-        ndep = [2, 4, 6, 10]
-        nfree = [8, 12, 14, 16, 18, 20, 22]
-        cfree = ['269/95360', '13805/611712', '83/1314', '3607/16544',
-                 '2196/619', '-35962/2395', '7352/605']
-        cdep = odex.compute_rextrap_weights(ndep, nfree, cfree)
-        cdep = np.array(cdep).astype(np.float64)
+            cfree = sympy.sympify(cfree)
+            cfree = np.array(cfree).astype(np.float64)
 
-        cfree = sympy.sympify(cfree)
-        cfree = np.array(cfree).astype(np.float64)
+            steps = np.append(ndep, nfree)
+            weights = np.append(cdep,cfree)
+            isb = 0.7695
 
-        steps = np.append(ndep, nfree)
-        weights = np.append(cdep,cfree)
-        steppers = [odex.GBS(step) for step in steps]
-        num_cores = 6
-        isb = 0.7695
+        elif cores == 8:
+            ndep = [2, 26, 28, 30]
+            nfree = list(range(4,26,2))
+            cfree = ['10827/755105792', '7807/65552384', '16757/38105088', '9667/8105984',
+                     '1229/449920', '10649/1863936', '6499/565376', '12003/517120',
+                     '5003/101760', '3767/32472', '2843/8591']
+            cdep = odex.compute_rextrap_weights(ndep, nfree, cfree)
+            cdep = np.array(cdep).astype(np.float64)
 
-    elif label=='GBS_12,8':
-        ndep = [2, 8, 10, 16, 24, 26]
-        nfree = [4, 6, 12, 14, 18, 20, 22, 28, 30]
-        cfree = ['12985/994150711296', '3295/1296039936', '2521/8515584',
-                 '1349/1959936', '11223/1226368', '5711/69600', '6007/2478',
-                 '-1338112/5553', '50764/475']
-        cdep = odex.compute_rextrap_weights(ndep, nfree, cfree)
-        cdep = np.array(cdep).astype(np.float64)
+            cfree = sympy.sympify(cfree)
+            cfree = np.array(cfree).astype(np.float64)
 
-        cfree = sympy.sympify(cfree)
-        cfree = np.array(cfree).astype(np.float64)
+            steps = np.append(ndep, nfree)
+            weights = np.append(cdep,cfree)
+            isb = 0.8176
 
-        steps = np.append(ndep, nfree)
-        weights = np.append(cdep,cfree)
-        steppers = [odex.GBS(step) for step in steps]
-        num_cores = 8
-        isb = 0.7116
+    elif order == 12:
+        if cores == 4:
+            steps = [2, 8, 12, 14, 16, 20]
+            weights = odex.compute_rextrap_weights(steps)
+            weights = np.array(weights).astype(np.float64)
+            isb = 0.4515
 
-    else:
-        raise ValueError('Unknown Stepper Label')
-        
-    return steppers, steps, weights, num_cores, isb
+        elif cores == 8:
+            ndep = [2, 8, 10, 16, 24, 26]
+            nfree = [4, 6, 12, 14, 18, 20, 22, 28, 30]
+            cfree = ['12985/994150711296', '3295/1296039936', '2521/8515584',
+                     '1349/1959936', '11223/1226368', '5711/69600', '6007/2478',
+                     '-1338112/5553', '50764/475']
+            cdep = odex.compute_rextrap_weights(ndep, nfree, cfree)
+            cdep = np.array(cdep).astype(np.float64)
+
+            cfree = sympy.sympify(cfree)
+            cfree = np.array(cfree).astype(np.float64)
+
+            steps = np.append(ndep, nfree)
+            weights = np.append(cdep,cfree)
+            isb = 0.7116
+
+    elif order == 16:
+        if cores == 5:
+            steps = [2, 8, 10, 12, 14, 16, 18, 22]
+            weights = odex.compute_rextrap_weights(steps)
+            weights = np.array(weights).astype(np.float64)
+            isb = 0.4162
+
+    if steps is None:
+        raise ValueError('Unknown Stepper Configuration')
+
+    steppers = [odex.GBS(step) for step in steps]
+    return steppers, steps, weights, isb
 
 
-def run_odex_simple(config=None,fn_eval_time=0):
+def run_odex_simple(config,parallel=True):
     """Test the extrapolation scheme running on a given number of cores.
-       :param fn_eval_time: Approximate time each ODE function evaluation
-                            should take to simulate different scale problems
     """
 
     # ODE: y' = system(t,y)
     def system(t,y):
-        if fn_eval_time > 0:
-            time.sleep(fn_eval_time)
         return y
 
     # Initial conditions and number of steps to take
-    y0 = 1
-    t0 = 0
-    t1 = 2
-    n  = 2000
+    y0 = 1.
+    t0 = 0.
+    t1 = 2.
+    n  = 20
     dt = float(t1-t0)/n
 
     # Construct the extrapolation stepper
-    steppers, steps, weights, num_cores, isb = make_extrap_config(config)
-    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, y0, num_cores=num_cores)
+    steppers, steps, weights, isb = make_extrap_config(config)
+    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, y0, parallel=parallel)
 
-    print('odex: simple ode on num_cores == {}...'.format(num_cores))
+    print('odex: simple ode...')
 
     # Solve the system, profiling
     start = time.time()
@@ -112,7 +122,7 @@ def run_odex_simple(config=None,fn_eval_time=0):
     error = yn[-1]-np.exp(t1)
     print('  error: {}'.format(error))
     print('  duration: {}'.format(duration))
-    assert abs(error) < 2e-10
+    assert abs(error) < 2.1e-12
 
     iters = 100
     mean_eval_time = 0
@@ -130,9 +140,9 @@ def run_odex_simple(config=None,fn_eval_time=0):
 
 
 def run_odex_convection_2d(config, do_plot, outfile=None):
-    steppers, steps, weights, num_cores, isb = make_extrap_config(config)
+    steppers, steps, weights, isb = make_extrap_config(config)
 
-    print('odex: 2D convection on num_cores == {}...'.format(num_cores))
+    print('odex: 2D convection...')
 
     # PDE initial data
     npoints = 64
@@ -209,7 +219,7 @@ def run_odex_convection_2d(config, do_plot, outfile=None):
         return ut
 
     # Construct the extrapolation stepper
-    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, u0, num_cores=num_cores)
+    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, u0, parallel=True)
 
     # Step the system once to ensure one-time setup completes before profiling
     stepper.step(u0, t0, dt, 1, dense_output=None, observer=None)
@@ -258,25 +268,30 @@ def run_odex_convection_2d(config, do_plot, outfile=None):
     return duration
 
 
-def test_odex_convection_2d(plot_only=False):
+def test_odex_convection_2d(do_plot,filepath=None):
     print('')
-    duration = run_odex_convection_2d('GBS_12,4',plot_only)
+    config = {'order':8, 'cores':8}
+    duration = run_odex_convection_2d(config,do_plot,filepath)
     print('')
     print('Solver Duration: {}'.format(duration))
     print('')
 
 
 def sanity_check():
-    run_odex_simple('GBS_8,3')
-    run_odex_simple('GBS_12,4')
-    run_odex_simple('GBS_16,5')
-    run_odex_simple('GBS_8,6')
-    run_odex_simple('GBS_12,8')
+    parallels = [True, False]
+    for parallel in parallels:
+        run_odex_simple({'order':8, 'cores':3},parallel)
+        run_odex_simple({'order':8, 'cores':6},parallel)
+        run_odex_simple({'order':8, 'cores':8},parallel)
+        run_odex_simple({'order':12,'cores':4},parallel)
+        run_odex_simple({'order':12,'cores':8},parallel)
+        run_odex_simple({'order':16,'cores':5},parallel)
 
 
 def main():
     sanity_check()
-    test_odex_convection_2d(True)
+    filepath = None
+    test_odex_convection_2d(do_plot=True,filepath=filepath)
 
 
 if __name__=='__main__':
