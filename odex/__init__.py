@@ -1,3 +1,4 @@
 from .gbs import GBS
 from .extrapolation_stepper import ExtrapolationStepper
+from .make_extrapolation_stepper import make_extrapolation_stepper
 from .compute_rextrap_weights import compute_rextrap_weights

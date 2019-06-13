@@ -8,90 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as anim
 
 
-def make_extrap_config(config=None):
-    if config is None:
-        config = {'order':8, 'cores':3}
-
-    order = config['order']
-    cores = config['cores']
-    steps = None
-
-    if order == 8:
-        if cores == 3:
-            steps = [2, 16, 18, 20]
-            weights = odex.compute_rextrap_weights(steps)
-            weights = np.array(weights).astype(np.float64)
-            isb = 0.5799
-
-        elif cores == 6:
-            ndep = [2, 4, 6, 10]
-            nfree = [8, 12, 14, 16, 18, 20, 22]
-            cfree = ['269/95360', '13805/611712', '83/1314', '3607/16544',
-                     '2196/619', '-35962/2395', '7352/605']
-            cdep = odex.compute_rextrap_weights(ndep, nfree, cfree)
-            cdep = np.array(cdep).astype(np.float64)
-
-            cfree = sympy.sympify(cfree)
-            cfree = np.array(cfree).astype(np.float64)
-
-            steps = np.append(ndep, nfree)
-            weights = np.append(cdep,cfree)
-            isb = 0.7695
-
-        elif cores == 8:
-            ndep = [2, 26, 28, 30]
-            nfree = list(range(4,26,2))
-            cfree = ['10827/755105792', '7807/65552384', '16757/38105088', '9667/8105984',
-                     '1229/449920', '10649/1863936', '6499/565376', '12003/517120',
-                     '5003/101760', '3767/32472', '2843/8591']
-            cdep = odex.compute_rextrap_weights(ndep, nfree, cfree)
-            cdep = np.array(cdep).astype(np.float64)
-
-            cfree = sympy.sympify(cfree)
-            cfree = np.array(cfree).astype(np.float64)
-
-            steps = np.append(ndep, nfree)
-            weights = np.append(cdep,cfree)
-            isb = 0.8176
-
-    elif order == 12:
-        if cores == 4:
-            steps = [2, 8, 12, 14, 16, 20]
-            weights = odex.compute_rextrap_weights(steps)
-            weights = np.array(weights).astype(np.float64)
-            isb = 0.4515
-
-        elif cores == 8:
-            ndep = [2, 8, 10, 16, 24, 26]
-            nfree = [4, 6, 12, 14, 18, 20, 22, 28, 30]
-            cfree = ['12985/994150711296', '3295/1296039936', '2521/8515584',
-                     '1349/1959936', '11223/1226368', '5711/69600', '6007/2478',
-                     '-1338112/5553', '50764/475']
-            cdep = odex.compute_rextrap_weights(ndep, nfree, cfree)
-            cdep = np.array(cdep).astype(np.float64)
-
-            cfree = sympy.sympify(cfree)
-            cfree = np.array(cfree).astype(np.float64)
-
-            steps = np.append(ndep, nfree)
-            weights = np.append(cdep,cfree)
-            isb = 0.7116
-
-    elif order == 16:
-        if cores == 5:
-            steps = [2, 8, 10, 12, 14, 16, 18, 22]
-            weights = odex.compute_rextrap_weights(steps)
-            weights = np.array(weights).astype(np.float64)
-            isb = 0.4162
-
-    if steps is None:
-        raise ValueError('Unknown Stepper Configuration')
-
-    steppers = [odex.GBS(step) for step in steps]
-    return steppers, steps, weights, isb
-
-
-def run_odex_simple(config,parallel=True):
+def run_odex_simple(config, parallel=True):
     """Test the extrapolation scheme running on a given number of cores.
     """
 
@@ -107,8 +24,7 @@ def run_odex_simple(config,parallel=True):
     dt = float(t1-t0)/n
 
     # Construct the extrapolation stepper
-    steppers, steps, weights, isb = make_extrap_config(config)
-    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, y0, parallel=parallel)
+    stepper = odex.make_extrapolation_stepper(system, y0, config=config, parallel=parallel)
 
     print('odex: simple ode...')
 
@@ -132,7 +48,7 @@ def run_odex_simple(config,parallel=True):
         mean_eval_time += time.time()-start
     mean_eval_time /= iters
 
-    estimated_duration = n*np.sum(np.array(steps)+1)*mean_eval_time
+    estimated_duration = n*np.sum(np.array(stepper.stepcounts())+1)*mean_eval_time
     print('  estimated duration: {}'.format(estimated_duration))
     print('  efficiency: {0:.2f}%'.format(100*estimated_duration/duration))
 
@@ -140,8 +56,6 @@ def run_odex_simple(config,parallel=True):
 
 
 def run_odex_convection_2d(config, do_plot, outfile=None):
-    steppers, steps, weights, isb = make_extrap_config(config)
-
     print('odex: 2D convection...')
 
     # PDE initial data
@@ -156,11 +70,6 @@ def run_odex_convection_2d(config, do_plot, outfile=None):
     t0 = 0.              # Simulation start time
     nsteps = 2048        # Number of time steps
     spectral = True
-
-    # Set up maximum time step size
-    hmax = k*(max(steps)+1)*isb/(2*max(c))
-    if spectral: hmax = hmax/np.pi
-    dt = hmax*.99
 
     # Movie writer setup
     if outfile is not None:
@@ -219,7 +128,12 @@ def run_odex_convection_2d(config, do_plot, outfile=None):
         return ut
 
     # Construct the extrapolation stepper
-    stepper = odex.ExtrapolationStepper(steppers, steps, weights, system, u0, parallel=True)
+    stepper = odex.make_extrapolation_stepper(system, u0, config=config, parallel=True)
+
+    # Set up maximum time step size
+    hmax = k*(max(stepper.stepcounts())+1)*stepper.isbn()/(2*max(c))
+    if spectral: hmax = hmax/np.pi
+    dt = hmax*.99
 
     # Step the system once to ensure one-time setup completes before profiling
     stepper.step(u0, t0, dt, 1, dense_output=None, observer=None)
@@ -247,7 +161,7 @@ def run_odex_convection_2d(config, do_plot, outfile=None):
     mean_eval_time /= iters
 
     # Print the profiling results
-    estimated_duration = nsteps*np.sum(np.array(steps)+1)*mean_eval_time
+    estimated_duration = nsteps*np.sum(np.array(stepper.stepcounts())+1)*mean_eval_time
     print('  mean eval duration: {}'.format(mean_eval_time))
     print('  estimated duration: {}'.format(estimated_duration))
     print('  efficiency: {0:.2f}%'.format(100*estimated_duration/duration))

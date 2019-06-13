@@ -4,18 +4,22 @@ from .shared_state import SharedState
 from .partition import equipartition
 from .dtype import dtype
 
+
 class ExtrapolationStepper(object):
-    def __init__(self, steppers, steps, weights, system, state, parallel=False):
+    def __init__(self, steppers, steps, weights, system, state, parallel=True, isbn=None):
         """Initialize the ExtrapolationStepper
            :param steppers: list of underlying time steppers
            :param steps: step counts for each stepper in the extrapolation scheme
            :param weights: weights for each stepper in the scheme
            :param system: ODE system to time step
            :param state: value of type returned by the time stepper
+           :param isbn: normalized imaginary stability boundary
            :param parallel: run the algorithm distributed across cores
         """
         if len(steppers) != len(steps) or len(steppers) != len(weights):
             raise ValueError('number of steppers, step counts, and weights must all match!')
+
+        self._isbn = isbn
 
         # Sort the time steppers by step counts
         indices = np.argsort(steps)
@@ -39,6 +43,22 @@ class ExtrapolationStepper(object):
         """
         if self._pool is not None:
             self._pool.join()
+
+    def isbn(self):
+        """Return the Normalized Imaginary Stability Boundary of the scheme
+           :returns: float, normalized to [0,1]
+        """
+        return self._isbn
+
+    def stepcounts(self):
+        """Return the step count sequence for the extrapolation scheme
+        """
+        return self._steps
+
+    def weights(self):
+        """Return the weights corresponding to the scheme's step count sequence
+        """
+        return self._weights
 
     def step(self, state, t, dt, n, dense_output=True, observer=None):
         """Time step the extrapolation scheme n times, returning output from each time point.
