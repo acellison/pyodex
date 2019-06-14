@@ -6,7 +6,7 @@ from .dtype import dtype
 
 
 class ExtrapolationStepper(object):
-    def __init__(self, steppers, steps, weights, system, state, parallel=True, isbn=None):
+    def __init__(self, steppers, steps, weights, system, state, parallel=True, isbn=None, order=2):
         """Initialize the ExtrapolationStepper
            :param steppers: list of underlying time steppers
            :param steps: step counts for each stepper in the extrapolation scheme
@@ -20,6 +20,7 @@ class ExtrapolationStepper(object):
             raise ValueError('number of steppers, step counts, and weights must all match!')
 
         self._isbn = isbn
+        self._order = order
 
         # Sort the time steppers by step counts
         indices = np.argsort(steps)
@@ -37,12 +38,23 @@ class ExtrapolationStepper(object):
         else:
             self._evalfn = self._evaluate_serial
             self._pool = None
+            self._ncores = 1
 
     def join(self):
         """Block while waiting for all threads in the pool to join.
         """
         if self._pool is not None:
             self._pool.join()
+
+    @property
+    def order(self):
+        """Return the order of accuracy of the integrator"""
+        return self._order
+
+    @property
+    def ncores(self):
+        """Return the number of cores the stepper is running on"""
+        return self._ncores
 
     @property
     def isbn(self):
@@ -53,8 +65,7 @@ class ExtrapolationStepper(object):
 
     @property
     def stepcounts(self):
-        """Return the step count sequence for the extrapolation scheme
-        """
+        """Return the step count sequence for the extrapolation scheme"""
         return self._steps
 
     @property
@@ -137,6 +148,7 @@ class ExtrapolationStepper(object):
 
         # Each core shares its output with the main thread
         num_cores = len(partitions)
+        self._ncores = num_cores
         self._outputs = [SharedState(state) for ii in range(num_cores)]
 
         def make_worker_target_fn(ii):

@@ -91,7 +91,7 @@ def make_extrap_config(config=None):
         raise ValueError('Unknown Stepper Configuration')
 
     steppers = [GBS(step) for step in steps]
-    return steppers, steps, weights, isbn
+    return steppers, steps, weights, isbn, order
 
 
 def make_extrapolation_stepper(system, state, config=None, parallel=True):
@@ -101,7 +101,7 @@ def make_extrapolation_stepper(system, state, config=None, parallel=True):
        :param config: dictionary specifying order and number of cores
        :param parallel: boolean to select whether to distribute across cores
      """
-    steppers, steps, weights, isbn = make_extrap_config(config)
-    return ExtrapolationStepper(steppers, steps, weights, system, state, isbn=isbn, parallel=parallel)
+    steppers, steps, weights, isbn, order = make_extrap_config(config)
+    return ExtrapolationStepper(steppers, steps, weights, system, state, parallel=parallel, isbn=isbn, order=order)
 
 

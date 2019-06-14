@@ -26,7 +26,7 @@ def run_odex_simple(config, parallel=True):
     # Construct the extrapolation stepper
     stepper = odex.make_extrapolation_stepper(system, y0, config=config, parallel=parallel)
 
-    print('odex: simple ode...')
+    print('Testing GBS_{{{},{}}} on the ODE y\'=y...'.format(stepper.order,stepper.ncores))
 
     # Solve the system, profiling
     start = time.time()
