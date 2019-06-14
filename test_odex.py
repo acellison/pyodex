@@ -48,7 +48,7 @@ def run_odex_simple(config, parallel=True):
         mean_eval_time += time.time()-start
     mean_eval_time /= iters
 
-    estimated_duration = n*np.sum(np.array(stepper.stepcounts())+1)*mean_eval_time
+    estimated_duration = n*np.sum(np.array(stepper.stepcounts)+1)*mean_eval_time
     print('  estimated duration: {}'.format(estimated_duration))
     print('  efficiency: {0:.2f}%'.format(100*estimated_duration/duration))
 
@@ -131,7 +131,7 @@ def run_odex_convection_2d(config, do_plot, outfile=None):
     stepper = odex.make_extrapolation_stepper(system, u0, config=config, parallel=True)
 
     # Set up maximum time step size
-    hmax = k*(max(stepper.stepcounts())+1)*stepper.isbn()/(2*max(c))
+    hmax = k*(max(stepper.stepcounts)+1)*stepper.isbn/(2*max(c))
     if spectral: hmax = hmax/np.pi
     dt = hmax*.99
 

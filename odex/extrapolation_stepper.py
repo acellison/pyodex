@@ -44,17 +44,20 @@ class ExtrapolationStepper(object):
         if self._pool is not None:
             self._pool.join()
 
+    @property
     def isbn(self):
         """Return the Normalized Imaginary Stability Boundary of the scheme
            :returns: float, normalized to [0,1]
         """
         return self._isbn
 
+    @property
     def stepcounts(self):
         """Return the step count sequence for the extrapolation scheme
         """
         return self._steps
 
+    @property
     def weights(self):
         """Return the weights corresponding to the scheme's step count sequence
         """
