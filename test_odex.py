@@ -161,7 +161,7 @@ def run_odex_convection_2d(config, do_plot, outfile=None):
     mean_eval_time /= iters
 
     # Print the profiling results
-    estimated_duration = nsteps*np.sum(np.array(stepper.stepcounts())+1)*mean_eval_time
+    estimated_duration = nsteps*np.sum(np.array(stepper.stepcounts)+1)*mean_eval_time
     print('  mean eval duration: {}'.format(mean_eval_time))
     print('  estimated duration: {}'.format(estimated_duration))
     print('  efficiency: {0:.2f}%'.format(100*estimated_duration/duration))
