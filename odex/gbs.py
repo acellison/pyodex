@@ -14,7 +14,8 @@ class GBS(object):
         self._state = None
 
     def resize(self, state):
-        self._state = np.zeros((3,*np.shape(state)),dtype=dtype(state))
+        shape = (3,)+np.shape(state)
+        self._state = np.zeros(shape,dtype=dtype(state))
 
     def step(self, system, state, t, dt, fval0=None):
         """Step the system forward one time step.

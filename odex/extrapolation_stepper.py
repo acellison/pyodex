@@ -75,7 +75,8 @@ class ExtrapolationStepper(object):
         evalfn  = self._evalfn
         system  = self._system
         if dense_output:
-            output  = np.empty((n, *np.shape(state)),dtype=dtype(state))
+            shape = (n,)+np.shape(state)
+            output  = np.empty(shape,dtype=dtype(state))
         state = np.copy(state)
 
         for ii in range(n):
